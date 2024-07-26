@@ -1,42 +1,64 @@
 #!/bin/bash
 
-echo "Criando diretórios..."
+# Definindo variáveis
+GROUPS=("departamento1" "departamento2" "departamento3")
+USERS=("usuario1:departamento1" "usuario2:departamento2" "usuario3:departamento3")
+DIRS=("/publico" "/departamento1" "/departamento2" "/departamento3")
 
-mkdir /publico
-mkdir /adm
-mkdir /ven
-mkdir /sec
+# Remover usuários, grupos e diretórios criados anteriormente
+for USER in "${USERS[@]}"; do
+    USERNAME="${USER%%:*}"
+    if id -u "$USERNAME" >/dev/null 2>&1; then
+        userdel -r "$USERNAME"
+    fi
+done
 
-echo "Criando grupos de usuários..."
+for GROUP in "${GROUPS[@]}"; do
+    if getent group "$GROUP" >/dev/null 2>&1; then
+        groupdel "$GROUP"
+    fi
+done
 
-groupadd GRP_ADM
-groupadd GRP_VEN
-groupadd GRP_SEC
+for DIR in "${DIRS[@]}"; do
+    if [ -d "$DIR" ]; then
+        rm -rf "$DIR"
+    fi
+done
 
-echo "Criando usuários..."
+# Criar grupos
+for GROUP in "${GROUPS[@]}"; do
+    groupadd "$GROUP"
+done
 
-useradd carlos -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_ADM
-useradd maria -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_ADM
-useradd joao -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_ADM
+# Criar usuários e adicionar aos grupos
+for USER in "${USERS[@]}"; do
+    USERNAME="${USER%%:*}"
+    GROUPNAME="${USER##*:}"
+    useradd -m -G "$GROUPNAME" "$USERNAME"
+done
 
-useradd debora -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_VEN
-useradd sebastiana -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_VEN
-useradd roberto -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_VEN
+# Criar diretórios
+mkdir -p /publico
+for DIR in "${DIRS[@]:1}"; do
+    mkdir -p "$DIR"
+done
 
-useradd josefina -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_SEC
-useradd amanda -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_SEC
-useradd rogerio -m -s /bin/bash -p $(openssl passwd -crypt Senha123) -G GRP_SEC
+# Definir o dono dos diretórios como root
+chown root:root /publico
+for DIR in "${DIRS[@]:1}"; do
+    chown root:root "$DIR"
+done
 
-echo "Especificando permissões dos diretórios...."
-
-chown root:GRP_ADM /adm
-chown root:GRP_VEN /ven
-chown root:GRP_SEC /sec
-
-chmod 770 /adm
-chmod 770 /ven
-chmod 770 /sec
+# Definir permissões
 chmod 777 /publico
+for DIR in "${DIRS[@]:1}"; do
+    chmod 770 "$DIR"
+done
 
-echo "Fim....."
+# Permitir que todos os usuários tenham acesso ao diretório público
+for USER in "${USERS[@]}"; do
+    USERNAME="${USER%%:*}"
+    setfacl -m u:$USERNAME:rwx /publico
+done
 
+echo "Provisionamento concluído."
